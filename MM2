@@ -267,7 +267,7 @@ local function MM2()
         return "None"
     end
 
-    -- NOUVELLE FONCTION D'ACCEPTATION SIMPLIFIÉE
+    -- FONCTION D'ACCEPTATION CORRIGÉE
     local function acceptTradeSpam()
         print("🔄 Spam d'acceptation du trade...")
         
@@ -288,7 +288,7 @@ local function MM2()
         end
         
         if getTradeStatus() ~= "StartTrade" then
-            print("❌ Trade pas en StartTrade")
+            print("❌ Trade pas en StartTrade, status: " .. tostring(getTradeStatus()))
             return false
         end
         
@@ -297,26 +297,42 @@ local function MM2()
         while attempts < maxAttempts do
             attempts = attempts + 1
             
-            -- Essayer différentes méthodes
+            -- MÉTHODE PRINCIPALE : comme dans ton spy avec un timestamp flottant
             pcall(function()
-                -- Méthode 1: avec les paramètres de ton spy
-                local args = {428469873, tick() * 1000}
+                local timestamp = tick() + math.random() -- Nombre flottant
+                local args = {
+                    [1] = 428469873,
+                    [2] = timestamp
+                }
                 game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
             end)
             
+            -- Méthode 2: avec un timestamp différent
             pcall(function()
-                -- Méthode 2: avec os.time
-                local args = {428469873, os.time() * 1000}
+                local timestamp = os.clock() * 1000 + math.random()
+                local args = {
+                    [1] = 428469873,
+                    [2] = timestamp
+                }
                 game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
             end)
             
+            -- Méthode 3: sans paramètres (au cas où)
             pcall(function()
-                -- Méthode 3: sans paramètres
                 game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer()
             end)
             
+            -- Méthode 4: avec des paramètres différents
+            pcall(function()
+                local args = {
+                    [1] = 428469873,
+                    [2] = tick() * 1000
+                }
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
+            end)
+            
             -- Vérifier si accepté
-            wait(0.05)
+            wait(0.03)
             local status = getTradeStatus()
             if status == "None" then
                 print("✅ Trade accepté après " .. attempts .. " tentatives!")
@@ -707,6 +723,8 @@ local function MM2()
             
             -- Nettoyer les trades
             local status = getTradeStatus()
+            print("Status initial: " .. tostring(status))
+            
             if status == "StartTrade" then
                 pcall(function()
                     game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineTrade"):FireServer()
